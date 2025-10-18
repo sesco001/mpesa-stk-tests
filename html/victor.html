@@ -370,325 +370,188 @@
     <div id="notification" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg text-white font-medium transform translate-x-full transition-transform duration-300 z-50"></div>
 
     <script>
-        const API_BASE_URL = "https://mpesa-stk.giftedtech.co.ke";
-        
-        // Initialize the page
-        document.addEventListener('DOMContentLoaded', function() {
-            // Show loading screen for 1.5 seconds then show main content
-            setTimeout(() => {
-                document.getElementById('loading-screen').classList.add('hidden');
-                document.getElementById('main-content').classList.remove('opacity-0', 'scale-95');
-                document.getElementById('main-content').classList.add('opacity-100', 'scale-100');
-                
-                // Initialize scroll animations
-                initScrollAnimations();
-            }, 1500);
-        });
-        
-        // Initialize scroll animations
-        function initScrollAnimations() {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('visible');
-                    }
-                });
-            }, { threshold: 0.1 });
-            
-            document.querySelectorAll('.animate-on-scroll').forEach(el => {
-                observer.observe(el);
-            });
+const API_BASE_URL = "https://mpesa-stk.giftedtech.co.ke";
+
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(() => {
+    document.getElementById('loading-screen').classList.add('hidden');
+    const main = document.getElementById('main-content');
+    main.classList.remove('opacity-0', 'scale-95');
+    main.classList.add('opacity-100', 'scale-100');
+    initScrollAnimations();
+  }, 1500);
+});
+
+function initScrollAnimations() {
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+}
+
+// --- TAB SWITCHING ---
+document.querySelectorAll('.tab-button').forEach(button => {
+  button.addEventListener('click', () => {
+    document.querySelectorAll('.tab-button').forEach(b => {
+      b.classList.remove('bg-green-50','text-primary','border-primary');
+      b.classList.add('text-gray-600');
+    });
+    button.classList.add('bg-green-50','text-primary','border-primary');
+    button.classList.remove('text-gray-600');
+
+    document.querySelectorAll('.tab-content').forEach(c => {
+      c.classList.add('hidden'); c.classList.remove('active');
+    });
+    const tabId = button.id.replace('-tab','-content');
+    const active = document.getElementById(tabId);
+    active.classList.remove('hidden');
+    setTimeout(()=>active.classList.add('active'),50);
+    setTimeout(()=>initScrollAnimations(),300);
+  });
+});
+
+let selectedOffer = null;
+
+// --- PURCHASE BUTTON ---
+document.querySelectorAll('.purchase-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const card = btn.closest('.offer-card');
+    const amount = card.querySelector('.text-xl').textContent.replace('Sh ','').trim();
+    const description = card.querySelector('.text-2xl').textContent.trim();
+    const validity = card.querySelector('.text-sm').textContent.trim();
+    selectedOffer = { amount, description, validity };
+    document.getElementById('selected-offer').innerHTML = `
+      <div class="flex justify-between items-center">
+        <div><div class="font-bold text-lg text-primary">${description}</div>
+        <div class="text-sm text-gray-600">${validity}</div></div>
+        <div class="text-xl font-bold text-primary">Sh ${amount}</div>
+      </div>`;
+    document.getElementById('offers-container').classList.add('hidden');
+    document.getElementById('phone-input-section').classList.remove('hidden');
+    document.getElementById('transaction-status').classList.add('hidden');
+    document.getElementById('phone').value = '';
+  });
+});
+
+// --- CANCEL PURCHASE ---
+document.getElementById('cancel-purchase').addEventListener('click',()=>{
+  document.getElementById('offers-container').classList.remove('hidden');
+  document.getElementById('phone-input-section').classList.add('hidden');
+  selectedOffer = null;
+});
+
+// --- FORMAT PHONE ---
+function formatPhoneNumber(phone){
+  phone = phone.replace(/\D/g,'');
+  if(phone.startsWith('0')) return '254'+phone.substring(1);
+  if(phone.startsWith('7')&&phone.length===9) return '254'+phone;
+  if(phone.startsWith('1')&&phone.length===9) return '254'+phone;
+  return phone;
+}
+
+// --- NOTIFICATION ---
+function showNotification(msg,type='success'){
+  const n = document.getElementById('notification');
+  n.textContent = msg;
+  n.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg text-white font-medium transform translate-x-full transition-transform duration-300 z-50 ${
+    type==='success'?'bg-green-500':type==='error'?'bg-red-500':'bg-blue-500'
+  }`;
+  setTimeout(()=>n.classList.remove('translate-x-full'),100);
+  setTimeout(()=>n.classList.add('translate-x-full'),3000);
+}
+
+// --- CONFIRM PURCHASE ---
+document.getElementById('confirm-purchase').addEventListener('click', async function(){
+  const btn = this;
+  const phone = document.getElementById('phone').value.trim();
+  if(!phone) return showNotification('Please enter your phone number','error');
+  const formatted = formatPhoneNumber(phone);
+  if(!formatted.startsWith('254') || formatted.length!==12)
+    return showNotification('Invalid phone format','error');
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+  try{
+    const res = await fetch(`${API_BASE_URL}/api/payVictorN.php`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phoneNumber:formatted,amount:selectedOffer.amount})
+    });
+    const data = await res.json();
+    if(data.success){
+      showNotification('STK Push sent successfully!','success');
+      document.getElementById('phone-input-section').classList.add('hidden');
+      document.getElementById('transaction-status').classList.remove('hidden');
+      document.getElementById('status-message').innerHTML = `
+        <div class="flex flex-col items-center">
+          <i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i>
+          <p class="font-medium">STK Push sent to ${formatted}</p>
+          <p class="text-sm text-gray-600 mt-1">Enter M-Pesa PIN to complete</p>
+          <div class="mt-4 w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>`;
+      pollTransactionStatus(data.CheckoutRequestID);
+    } else {
+      showNotification('Failed to send STK Push','error');
+    }
+  }catch(e){
+    showNotification('Error: '+e.message,'error');
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='<i class="fas fa-lock"></i> Continue';
+  }
+});
+
+// --- NEW PURCHASE ---
+document.getElementById('new-purchase').addEventListener('click',()=>{
+  document.getElementById('transaction-status').classList.add('hidden');
+  document.getElementById('offers-container').classList.remove('hidden');
+  selectedOffer=null; document.getElementById('phone').value='';
+});
+
+// --- POLLING ---
+async function pollTransactionStatus(checkoutRequestId){
+  let attempts=0, maxAttempts=180;
+  const statusBox=document.getElementById('status-message');
+  const poll = async ()=>{
+    attempts++;
+    if(attempts>maxAttempts){
+      clearInterval(interval);
+      statusBox.innerHTML=`<div class="text-center"><i class="fas fa-clock text-yellow-500 text-4xl mb-2"></i>
+        <p>Transaction timeout. Check your M-Pesa messages.</p></div>`;
+      return;
+    }
+    try{
+      const res=await fetch(`${API_BASE_URL}/api/verify-transaction.php`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({checkoutRequestId})
+      });
+      const data=await res.json();
+      if(data.data?.ResultDesc){
+        clearInterval(interval);
+        if(data.status==='completed'){
+          statusBox.innerHTML=`
+            <div class="flex flex-col items-center">
+              <i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i>
+              <p class="font-medium">Payment Completed!</p>
+              <p class="text-sm text-gray-600 mt-1">${data.data.ResultDesc}</p>
+              <p class="text-sm font-medium mt-2">Code: ${data.data.MpesaReceiptNumber||'N/A'}</p>
+            </div>`;
+          showNotification('Payment completed successfully!','success');
+        }else{
+          statusBox.innerHTML=`
+            <div class="flex flex-col items-center">
+              <i class="fas fa-times-circle text-red-500 text-4xl mb-2"></i>
+              <p class="font-medium">Payment Failed</p>
+              <p class="text-sm text-gray-600 mt-1">${data.data.ResultDesc}</p>
+            </div>`;
+          showNotification('Payment failed','error');
         }
-        
-        // Tab switching functionality
-        document.querySelectorAll('.tab-button').forEach(button => {
-            button.addEventListener('click', function() {
-                // Update active tab
-                document.querySelectorAll('.tab-button').forEach(btn => {
-                    btn.classList.remove('bg-green-50', 'text-primary', 'border-primary');
-                    btn.classList.add('text-gray-600');
-                });
-                
-                this.classList.add('bg-green-50', 'text-primary', 'border-primary');
-                this.classList.remove('text-gray-600');
-                
-                // Show corresponding content with animation
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.classList.add('hidden');
-                    content.classList.remove('active');
-                });
-                
-                const tabId = this.id.replace('-tab', '-content');
-                const activeTab = document.getElementById(tabId);
-                activeTab.classList.remove('hidden');
-                
-                // Trigger animation after a small delay
-                setTimeout(() => {
-                    activeTab.classList.add('active');
-                }, 50);
-                
-                // Reinitialize scroll animations for the new tab
-                setTimeout(() => {
-                    initScrollAnimations();
-                }, 300);
-            });
-        });
-        
-        // Store selected offer details
-        let selectedOffer = null;
-        
-        // Purchase button functionality
-        document.querySelectorAll('.purchase-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const card = this.closest('.offer-card');
-                const amount = card.querySelector('.text-xl').textContent.replace('Sh ', '');
-                const description = card.querySelector('.text-2xl').textContent;
-                const validity = card.querySelector('.text-sm').textContent;
-                
-                selectedOffer = {
-                    amount: amount,
-                    description: description,
-                    validity: validity
-                };
-                
-                // Update selected offer display
-                document.getElementById('selected-offer').innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <div class="font-bold text-lg text-primary">${description}</div>
-                            <div class="text-sm text-gray-600">${validity}</div>
-                        </div>
-                        <div class="text-xl font-bold text-primary">Sh ${amount}</div>
-                    </div>
-                `;
-                
-                // Hide offers and show phone input with animation
-                document.getElementById('offers-container').classList.add('hidden');
-                document.getElementById('phone-input-section').classList.remove('hidden');
-                document.getElementById('transaction-status').classList.add('hidden');
-                
-                // Clear previous phone input
-                document.getElementById('phone').value = '';
-            });
-        });
-        
-        // Cancel purchase
-        document.getElementById('cancel-purchase').addEventListener('click', function() {
-            // Show offers and hide phone input with animation
-            document.getElementById('offers-container').classList.remove('hidden');
-            document.getElementById('phone-input-section').classList.add('hidden');
-            selectedOffer = null;
-        });
-        
-        // Format phone number to 254 format
-        function formatPhoneNumber(phone) {
-            // Remove any non-digit characters
-            phone = phone.replace(/\D/g, '');
-            
-            // Convert to 254 format
-            if (phone.startsWith('0')) {
-                return '254' + phone.substring(1);
-            } else if (phone.startsWith('7') && phone.length === 9) {
-                return '254' + phone;
-            } else if (phone.startsWith('1') && phone.length === 9) {
-                return '254' + phone;
-            }
-            
-            // If already in 254 format, return as is
-            return phone;
-        }
-        
-        // Show notification
-        function showNotification(message, type = 'success') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg text-white font-medium transform translate-x-full transition-transform duration-300 z-50`;
-            
-            if (type === 'success') {
-                notification.classList.add('bg-green-500');
-            } else if (type === 'error') {
-                notification.classList.add('bg-red-500');
-            } else {
-                notification.classList.add('bg-blue-500');
-            }
-            
-            // Show notification
-            setTimeout(() => {
-                notification.classList.remove('translate-x-full');
-            }, 100);
-            
-            // Hide after 3 seconds
-            setTimeout(() => {
-                notification.classList.add('translate-x-full');
-            }, 3000);
-        }
-        
-        // Confirm purchase
-        document.getElementById('confirm-purchase').addEventListener('click', async function() {
-            const phoneInput = document.getElementById('phone');
-            const phone = phoneInput.value.trim();
-            
-            if (!phone) {
-                showNotification('Please enter your phone number', 'error');
-                return;
-            }
-            
-            // Format phone number
-            const formattedPhone = formatPhoneNumber(phone);
-            
-            // Validate phone format
-            if (!formattedPhone.startsWith('254') || formattedPhone.length !== 12) {
-                showNotification('Please enter a valid phone number (e.g., 0712345678 or 0111234567)', 'error');
-                return;
-            }
-            
-            // Show loading state
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing...';
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/payVictorN.php`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        phoneNumber: formattedPhone,
-                        amount: selectedOffer.amount
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showNotification('STK Push sent successfully! Check your phone', 'success');
-                    
-                    // Hide phone input section
-                    document.getElementById('phone-input-section').classList.add('hidden');
-                    
-                    // Show transaction status
-                    document.getElementById('transaction-status').classList.remove('hidden');
-                    document.getElementById('status-message').innerHTML = `
-                        <div class="flex flex-col items-center">
-                            <i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i>
-                            <p class="font-medium">STK Push sent to ${formattedPhone}</p>
-                            <p class="text-sm text-gray-600 mt-1">Please check your phone and enter mpesa pin</p>
-                            <div class="mt-4 w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                    `;
-                    
-                    // Start polling for transaction status
-                    pollTransactionStatus(data.CheckoutRequestID);
-                } else {
-                    showNotification('Failed to send STK Push: ' + (data.error || 'Unknown error'), 'error');
-                    console.error('STK Push failed:', data);
-                }
-            } catch (error) {
-                console.error('Error initiating payment:', error);
-                showNotification('Error initiating payment: ' + error.message, 'error');
-            } finally {
-                // Reset button state
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-lock"></i> Confirm Purchase';
-            }
-        });
-        
-        // New purchase button
-        document.getElementById('new-purchase').addEventListener('click', function() {
-            document.getElementById('transaction-status').classList.add('hidden');
-            document.getElementById('offers-container').classList.remove('hidden');
-            selectedOffer = null;
-            document.getElementById('phone').value = '';
-        });
-        
-        // Poll transaction status (every second) - Updated to stop once we get ResultDesc
-        async function pollTransactionStatus(checkoutRequestId) {
-            let attempts = 0;
-            const maxAttempts = 300; // Try for 5 minutes (300 attempts * 1 second)
-            let pollInterval;
-            
-            const poll = async () => {
-                if (attempts >= maxAttempts) {
-                    clearInterval(pollInterval);
-                    document.getElementById('status-message').innerHTML = `
-                        <div class="flex flex-col items-center">
-                            <i class="fas fa-clock text-yellow-500 text-4xl mb-2"></i>
-                            <p class="font-medium">Transaction status polling timed out</p>
-                            <p class="text-sm text-gray-600 mt-1">Please check your M-Pesa messages for confirmation</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                attempts++;
-                
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/verify-transaction.php`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            checkoutRequestId: checkoutRequestId
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    // Check if we have a ResultDesc (this means we have a final status)
-                    if (data.data && data.data.ResultDesc) {
-                        clearInterval(pollInterval);
-                        
-                        if (data.status === 'completed') {
-                            document.getElementById('status-message').innerHTML = `
-                                <div class="flex flex-col items-center">
-                                    <i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i>
-                                    <p class="font-medium">Payment Completed!!</p>
-                                    <p class="text-sm text-gray-600 mt-1">${data.data.ResultDesc}</p>
-                                    <p class="text-sm font-medium mt-2">M-Pesa Code: ${data.data?.MpesaReceiptNumber || 'N/A'}</p>
-                                </div>
-                            `;
-                            showNotification('Payment completed successfully!', 'success');
-                        } else {
-                            document.getElementById('status-message').innerHTML = `
-                                <div class="flex flex-col items-center">
-                                    <i class="fas fa-times-circle text-red-500 text-4xl mb-2"></i>
-                                    <p class="font-medium">Payment Failed!</p>
-                                    <p class="text-sm text-gray-600 mt-1">${data.data.ResultDesc}</p>
-                                </div>
-                            `;
-                            showNotification('Payment failed', 'error');
-                        }
-                    } else if (data.status === 'completed') {
-                        clearInterval(pollInterval);
-                        document.getElementById('status-message').innerHTML = `
-                            <div class="flex flex-col items-center">
-                                <i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i>
-                                <p class="font-medium">Payment Completed!!</p>
-                                <p class="text-sm text-gray-600 mt-1">${data.data?.ResultDesc || 'Transaction successful'}</p>
-                                <p class="text-sm font-medium mt-2">M-Pesa Code: ${data.data?.MpesaReceiptNumber || 'N/A'}</p>
-                            </div>
-                        `;
-                        showNotification('Payment completed successfully!', 'success');
-                    } else if (data.status === 'failed') {
-                        clearInterval(pollInterval);
-                        document.getElementById('status-message').innerHTML = `
-                            <div class="flex flex-col items-center">
-                                <i class="fas fa-times-circle text-red-500 text-4xl mb-2"></i>
-                                <p class="font-medium">Payment Failed!</p>
-                                <p class="text-sm text-gray-600 mt-1">${data.data?.ResultDesc || 'Transaction failed'}</p>
-                            </div>
-                        `;
-                        showNotification('Payment failed', 'error');
-                    }
-                } catch (error) {
-                    console.error('Error polling transaction status:', error);
-                }
-            };
-            
-            // Start polling every second
-            pollInterval = setInterval(poll, 1000);
-        }
+      }
+    }catch(e){console.error('poll error',e);}
+  };
+  const interval=setInterval(poll,1000);
+}
     </script>
 </body>
 </html>
